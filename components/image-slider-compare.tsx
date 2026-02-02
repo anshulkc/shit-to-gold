@@ -39,7 +39,7 @@ export function ImageSliderCompare({
           src={beforeImage}
           alt={beforeLabel}
           className="absolute inset-0 w-full h-full object-cover"
-          style={{ width: `${100 / (sliderPosition / 100)}%`, maxWidth: 'none' }}
+          style={{ width: sliderPosition > 0 ? `${100 / (sliderPosition / 100)}%` : '100%', maxWidth: 'none' }}
         />
       </div>
 

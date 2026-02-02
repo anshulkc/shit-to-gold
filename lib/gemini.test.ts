@@ -13,6 +13,10 @@ vi.mock('@google/genai', () => ({
 }))
 
 describe('gemini client', () => {
+  beforeEach(() => {
+    vi.stubEnv('GEMINI_API_KEY', 'test-api-key')
+  })
+
   it('creates chat with correct model', async () => {
     const chat = await createGeminiChat()
     expect(chat).toBeDefined()

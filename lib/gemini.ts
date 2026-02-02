@@ -1,8 +1,15 @@
 import { GoogleGenAI } from '@google/genai'
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! })
+function getGeminiClient() {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY environment variable is required')
+  }
+  return new GoogleGenAI({ apiKey })
+}
 
 export async function createGeminiChat() {
+  const ai = getGeminiClient()
   return ai.chats.create({
     model: 'gemini-3-pro-image-preview',
     config: {

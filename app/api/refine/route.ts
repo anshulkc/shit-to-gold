@@ -20,6 +20,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
+    // Validate crop has valid numeric properties
+    if (
+      typeof crop.x !== 'number' ||
+      typeof crop.y !== 'number' ||
+      typeof crop.width !== 'number' ||
+      typeof crop.height !== 'number' ||
+      crop.width <= 0 ||
+      crop.height <= 0
+    ) {
+      return NextResponse.json({ error: 'Invalid crop dimensions' }, { status: 400 })
+    }
+
     const base64Match = furnishedImage.match(/^data:([^;]+);base64,(.+)$/)
     if (!base64Match) {
       return NextResponse.json({ error: 'Invalid image format' }, { status: 400 })
