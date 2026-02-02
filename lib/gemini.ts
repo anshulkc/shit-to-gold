@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai'
+import { GoogleGenAI, Type } from '@google/genai'
 
 interface RetryOptions {
   maxRetries?: number
@@ -53,6 +53,20 @@ export async function createTextChat() {
   const ai = getGeminiClient()
   return ai.chats.create({
     model: 'gemini-2.5-flash',
+  })
+}
+
+export async function createJsonArrayChat() {
+  const ai = getGeminiClient()
+  return ai.chats.create({
+    model: 'gemini-2.5-flash',
+    config: {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.ARRAY,
+        items: { type: Type.STRING },
+      },
+    },
   })
 }
 

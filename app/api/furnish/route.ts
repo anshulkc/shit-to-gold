@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createTextChat, extractImageFromResponse, extractTextFromResponse, withRetry, sendImageMessageWithFallback } from '@/lib/gemini'
+import { createJsonArrayChat, extractImageFromResponse, extractTextFromResponse, withRetry, sendImageMessageWithFallback } from '@/lib/gemini'
 import { parseItemList } from '@/lib/parse-items'
 
 const DEFAULT_VARIANT_COUNT = 3
@@ -39,16 +39,23 @@ export async function POST(request: NextRequest) {
 
         if (!furnishedImageData) return null
 
-        // Get item list for this variant
-        const textChat = await createTextChat()
-        const itemsResponse = await withRetry(() => textChat.sendMessage({
+        // Get item list for this variant using JSON mode for guaranteed valid output
+        const jsonChat = await createJsonArrayChat()
+        const itemsResponse = await withRetry(() => jsonChat.sendMessage({
           message: [
             { inlineData: { data: furnishedImageData.data, mimeType: furnishedImageData.mimeType } },
-            { text: 'List every furniture and decor item visible in this furnished room as a JSON array of searchable product descriptions. Be specific (e.g., "mid-century walnut coffee table" not just "coffee table"). Only output the JSON array, nothing else.' },
+            { text: 'List every furniture and decor item visible in this furnished room as searchable product descriptions. Be specific (e.g., "mid-century walnut coffee table" not just "coffee table").' },
           ],
         }))
         const itemsText = extractTextFromResponse(itemsResponse)
-        const addedItems = parseItemList(itemsText)
+        // JSON mode guarantees valid JSON, but use parseItemList as fallback for safety
+        let addedItems: string[]
+        try {
+          const parsed = JSON.parse(itemsText)
+          addedItems = Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
+        } catch {
+          addedItems = parseItemList(itemsText)
+        }
 
         return {
           image: `data:${furnishedImageData.mimeType};base64,${furnishedImageData.data}`,
