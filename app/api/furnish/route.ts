@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createImageChat, createTextChat, extractImageFromResponse, extractTextFromResponse } from '@/lib/gemini'
+import { createImageChat, createTextChat, extractImageFromResponse, extractTextFromResponse, withRetry } from '@/lib/gemini'
 import { parseItemList } from '@/lib/parse-items'
 
 export async function POST(request: NextRequest) {
@@ -19,12 +19,12 @@ export async function POST(request: NextRequest) {
 
     // Turn 1: Generate furnished room (uses image model)
     const imageChat = await createImageChat()
-    const furnishResponse = await imageChat.sendMessage({
+    const furnishResponse = await withRetry(() => imageChat.sendMessage({
       message: [
         { inlineData: { data: base64Data, mimeType } },
         { text: `Furnish this empty room with the following style: ${prompt}. Add appropriate furniture, decor, and accessories that match this style. Make it look like a professionally designed, lived-in space.` },
       ],
-    })
+    }))
     const furnishedImageData = extractImageFromResponse(furnishResponse)
 
     if (!furnishedImageData) {
@@ -33,12 +33,12 @@ export async function POST(request: NextRequest) {
 
     // Turn 2: Get item list (uses cheaper text model with furnished image for context)
     const textChat = await createTextChat()
-    const itemsResponse = await textChat.sendMessage({
+    const itemsResponse = await withRetry(() => textChat.sendMessage({
       message: [
         { inlineData: { data: furnishedImageData.data, mimeType: furnishedImageData.mimeType } },
         { text: 'List every furniture and decor item visible in this furnished room as a JSON array of searchable product descriptions. Be specific (e.g., "mid-century walnut coffee table" not just "coffee table"). Only output the JSON array, nothing else.' },
       ],
-    })
+    }))
     const itemsText = extractTextFromResponse(itemsResponse)
     const addedItems = parseItemList(itemsText)
 

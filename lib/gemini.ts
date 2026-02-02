@@ -1,5 +1,46 @@
 import { GoogleGenAI } from '@google/genai'
 
+interface RetryOptions {
+  maxRetries?: number
+  initialDelayMs?: number
+}
+
+/**
+ * Wraps an async function with retry logic for 503 errors (model overloaded).
+ * Uses exponential backoff between retries.
+ */
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  options: RetryOptions = {}
+): Promise<T> {
+  const { maxRetries = 3, initialDelayMs = 1000 } = options
+
+  let lastError: Error | undefined
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (error) {
+      const err = error as Error & { status?: number }
+
+      // Only retry on 503 (service unavailable / model overloaded)
+      if (err.status !== 503) {
+        throw error
+      }
+
+      lastError = err
+
+      // Don't delay after the last attempt
+      if (attempt < maxRetries) {
+        const delay = initialDelayMs * Math.pow(2, attempt)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+    }
+  }
+
+  throw lastError
+}
+
 function getGeminiClient() {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) {

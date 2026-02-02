@@ -11,6 +11,7 @@ vi.mock('@/lib/gemini', () => ({
     }),
   }),
   extractImageFromResponse: vi.fn().mockReturnValue({ data: 'refinedBase64', mimeType: 'image/png' }),
+  withRetry: vi.fn().mockImplementation((fn) => fn()),
 }))
 
 import { POST } from './route'

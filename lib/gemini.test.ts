@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createTextChat, createImageChat, extractImageFromResponse, extractTextFromResponse } from './gemini'
+import { createTextChat, createImageChat, extractImageFromResponse, extractTextFromResponse, withRetry } from './gemini'
 
 // Track the last call arguments
 let lastCreateCallArgs: { model: string; config?: { responseModalities?: string[] } } | null = null
@@ -98,5 +98,73 @@ describe('gemini client', () => {
     }
     const image = extractImageFromResponse(response)
     expect(image).toBeNull()
+  })
+
+  describe('withRetry', () => {
+    it('returns result on first success', async () => {
+      const fn = vi.fn().mockResolvedValue('success')
+      const result = await withRetry(fn)
+      expect(result).toBe('success')
+      expect(fn).toHaveBeenCalledTimes(1)
+    })
+
+    it('retries on 503 error and succeeds', async () => {
+      const error503 = new Error('Model overloaded') as Error & { status?: number }
+      error503.status = 503
+
+      const fn = vi.fn()
+        .mockRejectedValueOnce(error503)
+        .mockResolvedValueOnce('success after retry')
+
+      // Use small delays for fast tests
+      const result = await withRetry(fn, { maxRetries: 3, initialDelayMs: 10 })
+      expect(result).toBe('success after retry')
+      expect(fn).toHaveBeenCalledTimes(2)
+    })
+
+    it('throws after max retries exhausted', async () => {
+      const error503 = new Error('Model overloaded') as Error & { status?: number }
+      error503.status = 503
+
+      const fn = vi.fn().mockRejectedValue(error503)
+
+      await expect(withRetry(fn, { maxRetries: 2, initialDelayMs: 10 })).rejects.toThrow('Model overloaded')
+      expect(fn).toHaveBeenCalledTimes(3) // initial + 2 retries
+    })
+
+    it('does not retry on non-503 errors', async () => {
+      const error400 = new Error('Bad request') as Error & { status?: number }
+      error400.status = 400
+
+      const fn = vi.fn().mockRejectedValue(error400)
+
+      await expect(withRetry(fn)).rejects.toThrow('Bad request')
+      expect(fn).toHaveBeenCalledTimes(1)
+    })
+
+    it('uses exponential backoff', async () => {
+      const error503 = new Error('Model overloaded') as Error & { status?: number }
+      error503.status = 503
+
+      const callTimes: number[] = []
+      const fn = vi.fn().mockImplementation(() => {
+        callTimes.push(Date.now())
+        if (callTimes.length < 3) {
+          return Promise.reject(error503)
+        }
+        return Promise.resolve('success')
+      })
+
+      const startTime = Date.now()
+      const result = await withRetry(fn, { maxRetries: 3, initialDelayMs: 50 })
+
+      expect(result).toBe('success')
+      expect(fn).toHaveBeenCalledTimes(3)
+
+      // Verify delays are approximately correct (allow some tolerance)
+      // First retry after ~50ms, second retry after ~100ms more
+      const totalTime = Date.now() - startTime
+      expect(totalTime).toBeGreaterThanOrEqual(140) // 50 + 100 = 150ms minimum, with some tolerance
+    })
   })
 })

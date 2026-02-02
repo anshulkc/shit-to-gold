@@ -14,6 +14,7 @@ vi.mock('@/lib/gemini', async () => {
     })),
     extractImageFromResponse: vi.fn().mockReturnValue({ data: 'furnishedBase64', mimeType: 'image/png' }),
     extractTextFromResponse: vi.fn().mockReturnValue('["walnut coffee table", "blue velvet sofa"]'),
+    withRetry: vi.fn().mockImplementation((fn) => fn()),
   }
 })
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createImageChat, extractImageFromResponse } from '@/lib/gemini'
+import { createImageChat, extractImageFromResponse, withRetry } from '@/lib/gemini'
 
 interface CropArea {
   x: number
@@ -40,14 +40,14 @@ export async function POST(request: NextRequest) {
 
     const chat = await createImageChat()
 
-    const refineResponse = await chat.sendMessage({
+    const refineResponse = await withRetry(() => chat.sendMessage({
       message: [
         { inlineData: { data: base64Data, mimeType } },
         {
           text: `In this room image, there is a region at coordinates (x: ${crop.x}, y: ${crop.y}, width: ${crop.width}, height: ${crop.height}) that needs to be changed. Replace the item in that region with: ${prompt}. Keep everything outside this region exactly the same. Maintain the same lighting, perspective, and style as the rest of the room.`
         },
       ],
-    })
+    }))
 
     const refinedImageData = extractImageFromResponse(refineResponse)
 

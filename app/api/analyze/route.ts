@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createTextChat, createImageChat, extractImageFromResponse, extractTextFromResponse } from '@/lib/gemini'
+import { createTextChat, createImageChat, extractImageFromResponse, extractTextFromResponse, withRetry } from '@/lib/gemini'
 import { parseItemList } from '@/lib/parse-items'
 
 export async function POST(request: NextRequest) {
@@ -17,23 +17,23 @@ export async function POST(request: NextRequest) {
 
     // Turn 1: Get item list using text model (cheaper)
     const textChat = await createTextChat()
-    const itemsResponse = await textChat.sendMessage({
+    const itemsResponse = await withRetry(() => textChat.sendMessage({
       message: [
         { inlineData: { data: base64Image, mimeType } },
         { text: 'List all furniture and decor items visible in this room as a JSON array of strings. Only output the JSON array, nothing else.' },
       ],
-    })
+    }))
     const itemsText = extractTextFromResponse(itemsResponse)
     const removedItems = parseItemList(itemsText)
 
     // Turn 2: Clear the room using image model (for image generation)
     const imageChat = await createImageChat()
-    const clearResponse = await imageChat.sendMessage({
+    const clearResponse = await withRetry(() => imageChat.sendMessage({
       message: [
         { inlineData: { data: base64Image, mimeType } },
         { text: 'Generate this same room with all furniture and decor removed. Keep the room structure intact: walls, floors, windows, doors, built-in features. The room should look empty and clean.' },
       ],
-    })
+    }))
     const clearedImageData = extractImageFromResponse(clearResponse)
 
     if (!clearedImageData) {
