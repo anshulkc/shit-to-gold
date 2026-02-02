@@ -8,7 +8,14 @@ function getGeminiClient() {
   return new GoogleGenAI({ apiKey })
 }
 
-export async function createGeminiChat() {
+export async function createTextChat() {
+  const ai = getGeminiClient()
+  return ai.chats.create({
+    model: 'gemini-2.5-flash',
+  })
+}
+
+export async function createImageChat() {
   const ai = getGeminiClient()
   return ai.chats.create({
     model: 'gemini-3-pro-image-preview',
@@ -17,6 +24,9 @@ export async function createGeminiChat() {
     },
   })
 }
+
+// Backwards compatibility alias - will be removed after API routes are updated
+export const createGeminiChat = createImageChat
 
 export interface GeminiResponse {
   candidates: Array<{
