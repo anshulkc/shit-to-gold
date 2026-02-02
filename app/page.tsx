@@ -12,6 +12,7 @@ import { ImageSliderCompare } from '@/components/image-slider-compare'
 import { ItemList } from '@/components/item-list'
 import { RefineDialog } from '@/components/refine-dialog'
 import { LoadingOverlay } from '@/components/loading-overlay'
+import { ImageVariantSelector } from '@/components/image-variant-selector'
 
 type AppState = 'upload' | 'analyzing' | 'cleared' | 'furnishing' | 'furnished' | 'editing' | 'refining'
 
@@ -20,19 +21,29 @@ interface EditHistoryItem {
   image: string
 }
 
+interface FurnishedVariant {
+  image: string
+  addedItems: string[]
+}
+
 export default function Home() {
   const [state, setState] = useState<AppState>('upload')
   const [originalImage, setOriginalImage] = useState<string | null>(null)
   const [clearedImage, setClearedImage] = useState<string | null>(null)
-  const [furnishedImage, setFurnishedImage] = useState<string | null>(null)
+  const [furnishedImages, setFurnishedImages] = useState<FurnishedVariant[]>([])
+  const [selectedVariantIndex, setSelectedVariantIndex] = useState(0)
   const [removedItems, setRemovedItems] = useState<string[]>([])
-  const [addedItems, setAddedItems] = useState<string[]>([])
   const [stylePrompt, setStylePrompt] = useState('')
   const [editPrompt, setEditPrompt] = useState('')
   const [editHistory, setEditHistory] = useState<EditHistoryItem[]>([])
   const [crop, setCrop] = useState<Crop>()
   const [refineDialogOpen, setRefineDialogOpen] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
+
+  // Derive current variant values
+  const currentVariant = furnishedImages[selectedVariantIndex]
+  const furnishedImage = currentVariant?.image ?? null
+  const addedItems = currentVariant?.addedItems ?? []
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -81,9 +92,9 @@ export default function Home() {
       if (!response.ok) throw new Error('Furnishing failed')
 
       const data = await response.json()
-      setFurnishedImage(data.furnishedImage)
-      setAddedItems(data.addedItems)
-      setEditHistory([{ prompt: stylePrompt, image: data.furnishedImage }])
+      setFurnishedImages(data.furnishedImages)
+      setSelectedVariantIndex(0)
+      setEditHistory([{ prompt: stylePrompt, image: data.furnishedImages[0].image }])
       setState('furnished')
     } catch (error) {
       console.error(error)
@@ -110,14 +121,19 @@ export default function Home() {
       if (!response.ok) throw new Error('Edit failed')
 
       const data = await response.json()
-      setFurnishedImage(data.editedImage)
+      // Update the current variant with the edited image
+      setFurnishedImages(prev => prev.map((v, i) =>
+        i === selectedVariantIndex
+          ? { ...v, image: data.editedImage }
+          : v
+      ))
       setEditHistory(prev => [...prev, { prompt: currentPrompt, image: data.editedImage }])
       setState('furnished')
     } catch (error) {
       console.error(error)
       setState('furnished')
     }
-  }, [furnishedImage, editPrompt])
+  }, [furnishedImage, editPrompt, selectedVariantIndex])
 
   const handleRefine = useCallback(async (prompt: string) => {
     if (!furnishedImage || !crop) return
@@ -171,9 +187,9 @@ export default function Home() {
   const handleStartOver = useCallback(() => {
     setOriginalImage(null)
     setClearedImage(null)
-    setFurnishedImage(null)
+    setFurnishedImages([])
+    setSelectedVariantIndex(0)
     setRemovedItems([])
-    setAddedItems([])
     setStylePrompt('')
     setEditPrompt('')
     setEditHistory([])
@@ -281,6 +297,12 @@ export default function Home() {
             )}
           </div>
 
+          <ImageVariantSelector
+            variants={furnishedImages}
+            selectedIndex={selectedVariantIndex}
+            onSelect={setSelectedVariantIndex}
+          />
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-4">
               <div className="border rounded-lg p-4 bg-muted/30">
@@ -290,7 +312,14 @@ export default function Home() {
                     <div
                       key={index}
                       className="text-sm p-2 bg-background rounded border cursor-pointer hover:bg-muted/50 transition-colors"
-                      onClick={() => setFurnishedImage(item.image)}
+                      onClick={() => {
+                        // Restore this edit to the current variant
+                        setFurnishedImages(prev => prev.map((v, i) =>
+                          i === selectedVariantIndex
+                            ? { ...v, image: item.image }
+                            : v
+                        ))
+                      }}
                     >
                       <span className="text-muted-foreground mr-2">{index + 1}.</span>
                       {item.prompt}
