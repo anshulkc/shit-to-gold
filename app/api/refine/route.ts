@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createGeminiChat, extractImageFromResponse } from '@/lib/gemini'
+import { extractImageFromResponse, sendImageMessageWithFallback } from '@/lib/gemini'
 
 interface CropArea {
   x: number
@@ -38,9 +38,7 @@ export async function POST(request: NextRequest) {
     }
     const [, mimeType, base64Data] = base64Match
 
-    const chat = await createGeminiChat()
-
-    const refineResponse = await chat.sendMessage({
+    const refineResponse = await sendImageMessageWithFallback({
       message: [
         { inlineData: { data: base64Data, mimeType } },
         {

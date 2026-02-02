@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('@/lib/gemini', () => ({
-  createGeminiChat: vi.fn().mockResolvedValue({
+  createImageChat: vi.fn().mockResolvedValue({
     sendMessage: vi.fn().mockResolvedValue({
       candidates: [{
         content: {
@@ -11,6 +11,7 @@ vi.mock('@/lib/gemini', () => ({
     }),
   }),
   extractImageFromResponse: vi.fn().mockReturnValue({ data: 'refinedBase64', mimeType: 'image/png' }),
+  withRetry: vi.fn().mockImplementation((fn) => fn()),
 }))
 
 import { POST } from './route'
