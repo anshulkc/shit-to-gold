@@ -97,7 +97,10 @@ describe('POST /api/furnish', () => {
     expect(createTextChat).toHaveBeenCalledTimes(1)
     expect(mockTextChatSendMessage).toHaveBeenCalledTimes(1)
     expect(mockTextChatSendMessage).toHaveBeenCalledWith({
-      message: expect.stringContaining('JSON array'),
+      message: expect.arrayContaining([
+        expect.objectContaining({ inlineData: expect.any(Object) }),
+        expect.objectContaining({ text: expect.stringContaining('JSON array') }),
+      ]),
     })
   })
 })

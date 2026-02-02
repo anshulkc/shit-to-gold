@@ -31,10 +31,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to generate furnished image' }, { status: 500 })
     }
 
-    // Turn 2: Get item list (uses cheaper text model)
+    // Turn 2: Get item list (uses cheaper text model with furnished image for context)
     const textChat = await createTextChat()
     const itemsResponse = await textChat.sendMessage({
-      message: 'List every furniture and decor item you added to this room as a JSON array of searchable product descriptions. Be specific (e.g., "mid-century walnut coffee table" not just "coffee table"). Only output the JSON array, nothing else.',
+      message: [
+        { inlineData: { data: furnishedImageData.data, mimeType: furnishedImageData.mimeType } },
+        { text: 'List every furniture and decor item visible in this furnished room as a JSON array of searchable product descriptions. Be specific (e.g., "mid-century walnut coffee table" not just "coffee table"). Only output the JSON array, nothing else.' },
+      ],
     })
     const itemsText = extractTextFromResponse(itemsResponse)
     const addedItems = parseItemList(itemsText)
