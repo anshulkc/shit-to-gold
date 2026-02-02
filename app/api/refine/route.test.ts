@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('@/lib/gemini', () => ({
-  createGeminiChat: vi.fn().mockResolvedValue({
+  createImageChat: vi.fn().mockResolvedValue({
     sendMessage: vi.fn().mockResolvedValue({
       candidates: [{
         content: {

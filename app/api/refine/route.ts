@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createGeminiChat, extractImageFromResponse } from '@/lib/gemini'
+import { createImageChat, extractImageFromResponse } from '@/lib/gemini'
 
 interface CropArea {
   x: number
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     }
     const [, mimeType, base64Data] = base64Match
 
-    const chat = await createGeminiChat()
+    const chat = await createImageChat()
 
     const refineResponse = await chat.sendMessage({
       message: [
