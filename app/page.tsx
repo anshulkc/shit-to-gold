@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
+import ReactCrop, { type Crop } from 'react-image-crop'
+import 'react-image-crop/dist/ReactCrop.css'
 
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -8,9 +10,10 @@ import { Input } from '@/components/ui/input'
 import { ImageDropzone } from '@/components/image-dropzone'
 import { ImageSliderCompare } from '@/components/image-slider-compare'
 import { ItemList } from '@/components/item-list'
+import { RefineDialog } from '@/components/refine-dialog'
 import { LoadingOverlay } from '@/components/loading-overlay'
 
-type AppState = 'upload' | 'analyzing' | 'cleared' | 'furnishing' | 'furnished' | 'editing'
+type AppState = 'upload' | 'analyzing' | 'cleared' | 'furnishing' | 'furnished' | 'editing' | 'refining'
 
 interface EditHistoryItem {
   prompt: string
@@ -27,6 +30,8 @@ export default function Home() {
   const [stylePrompt, setStylePrompt] = useState('')
   const [editPrompt, setEditPrompt] = useState('')
   const [editHistory, setEditHistory] = useState<EditHistoryItem[]>([])
+  const [crop, setCrop] = useState<Crop>()
+  const [refineDialogOpen, setRefineDialogOpen] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -114,6 +119,40 @@ export default function Home() {
     }
   }, [furnishedImage, editPrompt])
 
+  const handleRefine = useCallback(async (prompt: string) => {
+    if (!furnishedImage || !crop) return
+    setState('refining')
+    setRefineDialogOpen(false)
+
+    try {
+      const response = await fetch('/api/refine', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          furnishedImage,
+          crop: {
+            x: Math.round(crop.x),
+            y: Math.round(crop.y),
+            width: Math.round(crop.width),
+            height: Math.round(crop.height),
+          },
+          prompt,
+        }),
+      })
+
+      if (!response.ok) throw new Error('Refinement failed')
+
+      const data = await response.json()
+      setFurnishedImage(data.refinedImage)
+      setEditHistory(prev => [...prev, { prompt: `[Area] ${prompt}`, image: data.refinedImage }])
+      setState('furnished')
+      setCrop(undefined)
+    } catch (error) {
+      console.error(error)
+      setState('furnished')
+    }
+  }, [furnishedImage, crop])
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -138,6 +177,7 @@ export default function Home() {
     setStylePrompt('')
     setEditPrompt('')
     setEditHistory([])
+    setCrop(undefined)
     setState('upload')
   }, [])
 
@@ -147,7 +187,7 @@ export default function Home() {
         <h1 className="text-3xl font-bold">AI Room Furnisher</h1>
         {state !== 'upload' && (
           <div className="flex gap-2">
-            {(state === 'furnished' || state === 'editing') && (
+            {(state === 'furnished' || state === 'editing' || state === 'refining') && (
               <Button onClick={handleDownload}>Download</Button>
             )}
             <Button variant="outline" onClick={handleStartOver}>
@@ -204,7 +244,7 @@ export default function Home() {
         </div>
       )}
 
-      {(state === 'furnished' || state === 'editing') && clearedImage && furnishedImage && (
+      {(state === 'furnished' || state === 'editing' || state === 'refining') && clearedImage && furnishedImage && (
         <div className="space-y-6">
           <div className="relative">
             {state === 'editing' ? (
@@ -212,12 +252,32 @@ export default function Home() {
                 <img src={furnishedImage} alt="Furnished room" className="w-full h-full object-cover" />
                 <LoadingOverlay messages={['Applying edit...']} />
               </div>
+            ) : state === 'refining' ? (
+              <div className="relative aspect-video rounded-lg overflow-hidden">
+                <img src={furnishedImage} alt="Furnished room" className="w-full h-full object-cover" />
+                <LoadingOverlay messages={['Refining selection...']} />
+              </div>
             ) : (
-              <img
-                src={furnishedImage}
-                alt="Furnished room"
-                className="w-full rounded-lg"
-              />
+              <>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Click and drag on the image to select an area to refine, or use the text input below for general edits
+                </p>
+                <ReactCrop
+                  crop={crop}
+                  onChange={c => setCrop(c)}
+                  onComplete={() => {
+                    if (crop && crop.width > 10 && crop.height > 10) {
+                      setRefineDialogOpen(true)
+                    }
+                  }}
+                >
+                  <img
+                    src={furnishedImage}
+                    alt="Furnished room"
+                    className="w-full rounded-lg"
+                  />
+                </ReactCrop>
+              </>
             )}
           </div>
 
@@ -246,12 +306,12 @@ export default function Home() {
                   value={editPrompt}
                   onChange={(e) => setEditPrompt(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  disabled={state === 'editing'}
+                  disabled={state === 'editing' || state === 'refining'}
                   className="flex-1"
                 />
                 <Button
                   onClick={handleEdit}
-                  disabled={!editPrompt.trim() || state === 'editing'}
+                  disabled={!editPrompt.trim() || state === 'editing' || state === 'refining'}
                 >
                   Edit
                 </Button>
@@ -268,6 +328,13 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      <RefineDialog
+        open={refineDialogOpen}
+        onOpenChange={setRefineDialogOpen}
+        onSubmit={handleRefine}
+        isLoading={state === 'refining'}
+      />
     </main>
   )
 }
