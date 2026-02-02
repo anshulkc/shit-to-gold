@@ -14,7 +14,7 @@ import { RefineDialog } from '@/components/refine-dialog'
 import { LoadingOverlay } from '@/components/loading-overlay'
 import { ImageVariantSelector } from '@/components/image-variant-selector'
 
-type AppState = 'upload' | 'analyzing' | 'cleared' | 'furnishing' | 'furnished' | 'editing' | 'refining'
+type AppState = 'upload' | 'analyzing' | 'cleared' | 'manual-clearing' | 'furnishing' | 'furnished' | 'editing' | 'refining'
 
 interface EditHistoryItem {
   prompt: string
@@ -37,6 +37,8 @@ export default function Home() {
   const [editPrompt, setEditPrompt] = useState('')
   const [editHistory, setEditHistory] = useState<EditHistoryItem[]>([])
   const [crop, setCrop] = useState<Crop>()
+  const [clearCrop, setClearCrop] = useState<Crop>()
+  const [isClearingRegion, setIsClearingRegion] = useState(false)
   const [refineDialogOpen, setRefineDialogOpen] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
@@ -159,7 +161,12 @@ export default function Home() {
       if (!response.ok) throw new Error('Refinement failed')
 
       const data = await response.json()
-      setFurnishedImage(data.refinedImage)
+      // Update the current variant with the refined image
+      setFurnishedImages(prev => prev.map((v, i) =>
+        i === selectedVariantIndex
+          ? { ...v, image: data.refinedImage }
+          : v
+      ))
       setEditHistory(prev => [...prev, { prompt: `[Area] ${prompt}`, image: data.refinedImage }])
       setState('furnished')
       setCrop(undefined)
@@ -167,7 +174,40 @@ export default function Home() {
       console.error(error)
       setState('furnished')
     }
-  }, [furnishedImage, crop])
+  }, [furnishedImage, crop, selectedVariantIndex])
+
+  const handleClearRegion = useCallback(async () => {
+    if (!clearedImage || !clearCrop) return
+
+    setIsClearingRegion(true)
+
+    try {
+      const response = await fetch('/api/clear-region', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: clearedImage,
+          crop: {
+            x: Math.round(clearCrop.x),
+            y: Math.round(clearCrop.y),
+            width: Math.round(clearCrop.width),
+            height: Math.round(clearCrop.height),
+          },
+        }),
+      })
+
+      if (!response.ok) throw new Error('Clear region failed')
+
+      const data = await response.json()
+      setClearedImage(data.clearedImage)
+      setClearCrop(undefined)
+      // Stay in manual-clearing state so user can clear more areas
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setIsClearingRegion(false)
+    }
+  }, [clearedImage, clearCrop])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -194,6 +234,8 @@ export default function Home() {
     setEditPrompt('')
     setEditHistory([])
     setCrop(undefined)
+    setClearCrop(undefined)
+    setIsClearingRegion(false)
     setState('upload')
   }, [])
 
@@ -232,6 +274,14 @@ export default function Home() {
             beforeLabel="Original"
             afterLabel="Cleared"
           />
+          <div className="flex justify-center">
+            <Button
+              variant="outline"
+              onClick={() => setState('manual-clearing')}
+            >
+              Need to clear more?
+            </Button>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="md:col-span-2 space-y-4">
               <Textarea
@@ -250,6 +300,41 @@ export default function Home() {
             </div>
             <ItemList items={removedItems} title="Items Removed" showLinks={false} variant="removed" />
           </div>
+        </div>
+      )}
+
+      {state === 'manual-clearing' && clearedImage && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-muted-foreground">
+              Draw a rectangle around areas you want to clear
+            </p>
+            <Button onClick={() => setState('cleared')} disabled={isClearingRegion}>
+              Done clearing
+            </Button>
+          </div>
+          {isClearingRegion ? (
+            <div className="relative aspect-video rounded-lg overflow-hidden">
+              <img src={clearedImage} alt="Cleared room" className="w-full h-full object-cover" />
+              <LoadingOverlay messages={['Clearing selected area...']} />
+            </div>
+          ) : (
+            <ReactCrop
+              crop={clearCrop}
+              onChange={c => setClearCrop(c)}
+              onComplete={() => {
+                if (clearCrop && clearCrop.width > 10 && clearCrop.height > 10) {
+                  handleClearRegion()
+                }
+              }}
+            >
+              <img
+                src={clearedImage}
+                alt="Cleared room"
+                className="w-full rounded-lg"
+              />
+            </ReactCrop>
+          )}
         </div>
       )}
 
