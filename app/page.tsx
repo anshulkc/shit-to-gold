@@ -232,7 +232,7 @@ export default function Home() {
                 Furnish Room
               </Button>
             </div>
-            <ItemList items={removedItems} title="Items Removed" showLinks={false} />
+            <ItemList items={removedItems} title="Items Removed" showLinks={false} variant="removed" />
           </div>
         </div>
       )}
@@ -321,9 +321,9 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="space-y-4">
-              <ItemList items={removedItems} title="Items Removed" showLinks={false} />
-              <ItemList items={addedItems} title="Items Added" showLinks />
+            <div className="space-y-6">
+              <ItemList items={removedItems} title="Items Removed" showLinks={false} variant="removed" />
+              <ItemList items={addedItems} title="Items Added" showLinks variant="added" />
             </div>
           </div>
         </div>
