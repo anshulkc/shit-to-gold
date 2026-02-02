@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createImageChat, createTextChat, extractImageFromResponse, extractTextFromResponse, withRetry } from '@/lib/gemini'
+import { createTextChat, extractImageFromResponse, extractTextFromResponse, withRetry, sendImageMessageWithFallback } from '@/lib/gemini'
 import { parseItemList } from '@/lib/parse-items'
 
 export async function POST(request: NextRequest) {
@@ -18,13 +18,12 @@ export async function POST(request: NextRequest) {
     const [, mimeType, base64Data] = base64Match
 
     // Turn 1: Generate furnished room (uses image model)
-    const imageChat = await createImageChat()
-    const furnishResponse = await withRetry(() => imageChat.sendMessage({
+    const furnishResponse = await sendImageMessageWithFallback({
       message: [
         { inlineData: { data: base64Data, mimeType } },
         { text: `Furnish this empty room with the following style: ${prompt}. Add appropriate furniture, decor, and accessories that match this style. Make it look like a professionally designed, lived-in space.` },
       ],
-    }))
+    })
     const furnishedImageData = extractImageFromResponse(furnishResponse)
 
     if (!furnishedImageData) {

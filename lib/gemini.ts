@@ -56,14 +56,48 @@ export async function createTextChat() {
   })
 }
 
-export async function createImageChat() {
+const IMAGE_MODELS = ['gemini-2.5-flash-image', 'gemini-3-pro-image-preview'] as const
+
+export async function createImageChat(model: string = IMAGE_MODELS[0]) {
   const ai = getGeminiClient()
   return ai.chats.create({
-    model: 'gemini-3-pro-image-preview',
+    model,
     config: {
       responseModalities: ['TEXT', 'IMAGE'],
     },
   })
+}
+
+/**
+ * Sends an image generation message with automatic fallback to alternative models.
+ * If the primary model returns 503, retries with fallback models.
+ */
+export async function sendImageMessageWithFallback(
+  message: Parameters<Awaited<ReturnType<typeof createImageChat>>['sendMessage']>[0]
+) {
+  for (let i = 0; i < IMAGE_MODELS.length; i++) {
+    const model = IMAGE_MODELS[i]
+    const isLastModel = i === IMAGE_MODELS.length - 1
+
+    try {
+      const chat = await createImageChat(model)
+      return await withRetry(() => chat.sendMessage(message))
+    } catch (error) {
+      const err = error as Error & { status?: number }
+
+      // If it's a 503 and we have more models to try, continue to next model
+      if (err.status === 503 && !isLastModel) {
+        console.log(`Model ${model} overloaded, falling back to ${IMAGE_MODELS[i + 1]}`)
+        continue
+      }
+
+      // Otherwise, rethrow the error
+      throw error
+    }
+  }
+
+  // This should never be reached, but TypeScript needs it
+  throw new Error('All image models failed')
 }
 
 // Backwards compatibility alias - will be removed after API routes are updated
